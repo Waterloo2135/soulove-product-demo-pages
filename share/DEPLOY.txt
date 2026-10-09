@@ -1,0 +1,3 @@
+# Soulove Product Demo - fixed host deploy
+# After: gh auth login
+# Then: node deploy-gh-pages.cjs

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pomf has been shut down</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    background: #111;
+    color: #888;
+    text-align: center;
+  }
+  h1 { font-size: 4rem; color: #ccc; font-weight: 300; }
+  p { margin-top: .5rem; font-size: 1rem; }
+</style>
+</head>
+<body>
+  <div>
+    <h1>404</h1>
+    <p>Pomf has been shut down as previously announced.</p>
+    <p>Your files are safe and have not been deleted.</p>
+    <p>It will return after a long overhaul.</p>
+    <p>You can read the current project status <a href="https://infrablog.lain.la/pomf-project-status">here</a>.</p>
+  </div>
+</body>
+</html>
+ 

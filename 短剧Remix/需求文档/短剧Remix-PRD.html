@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>短剧 Remix PRD</title>
+<style>
+body{font-family:system-ui,"PingFang SC","Microsoft YaHei",sans-serif;color:#243530;margin:0;padding:28px;background:#f7f9f8;line-height:1.55}
+#prdContent{max-width:1100px;margin:auto}
+h1{font-size:28px;margin:0 0 8px}
+h2{margin:32px 0 12px;font-size:20px;border-bottom:1px solid #dce4e0;padding-bottom:6px}
+h3{margin:20px 0 8px;font-size:16px}
+table{border-collapse:collapse;width:100%;margin:14px 0;table-layout:fixed}
+th,td{border:1px solid #dce4e0;padding:10px 12px;vertical-align:top;overflow-wrap:anywhere}
+th{background:#eef4f1;text-align:left}
+.meta{color:#5b6c66;font-size:13px;margin-bottom:24px}
+.k{color:#21654f;font-weight:700}
+pre{background:#182622;color:#e8f5ef;padding:14px;border-radius:10px;overflow:auto;font-size:12px}
+.note{background:#eef4f1;border:1px solid #dce4e0;border-radius:10px;padding:10px 14px;margin:12px 0}
+a{color:#21654f}
+</style>
+</head>
+<body>
+<main id="prdContent">
+<h1>短剧 Remix 产品需求文档</h1>
+<p class="meta">产品：Soulove SL 主站 Mobile · 文档版本：v0.1 · 日期：2026-09-24 · 状态：已确认口径 / Demo 可点 · 原型：soulove-product-demo</p>
+
+<h2>1. 项目信息</h2>
+<table>
+<tr><th>项</th><th>内容</th></tr>
+<tr><td>产品</td><td>Soulove SL 主站 Mobile</td></tr>
+<tr><td>模块</td><td>短剧 Remix / Inspiration / Extend</td></tr>
+<tr><td>Persona</td><td>Guest / Free / Plus</td></tr>
+<tr><td>本期范围</td><td>仅 SL 主站 Mobile。不做 PC、SEM、Peek、Live-Pro。</td></tr>
+<tr><td>可点击原型</td><td>仓库 soulove-product-demo，本地 http://127.0.0.1:5173/ ；固定预览 https://waterloo2135.github.io/soulove-product-demo-pages/</td></tr>
+<tr><td>公司仓</td><td>http://gitlab.rich-social.com/waterloo/soulove-product-demo</td></tr>
+</table>
+
+<h2>2. 版本记录</h2>
+<table>
+<tr><th>版本</th><th>日期</th><th>说明</th></tr>
+<tr><td>v0.1</td><td>2026-09-24</td><td>按已确认口径整理 HTML PRD 与验收清单。对应 Demo 可点 Inspiration / Creation / Extend / My Remixes。</td></tr>
+</table>
+
+<h2>3. 需求背景</h2>
+<p>短剧播放后用户想「用剧中角色再生成片段」，但多数人不会写镜头级 prompt。竞品 Flickreels 提供 Remix 创作。Soulove 需要：降低创作门槛、用他人样片做社会证明、用制作行为商业化（不靠看词收费）。</p>
+
+<h2>4. 需求目标</h2>
+<ul>
+<li>从播放页进入 Remix，先看到他人/平台怎么拍，再自己创作或续写。</li>
+<li>Intent 与运营预设降低不会写 prompt 的成本。</li>
+<li>商业化发生在 Generate / Extend 提交，不拦截查看 Prompt。</li>
+<li>大尺度样片非会员马赛克，解锁复用 Private photo 会员墙。</li>
+</ul>
+<p>成功指标：本期不补埋点与数值目标，待确认。</p>
+
+<h2>5. 需求概述</h2>
+<p>用户在短剧播放页点 Remix → 默认 Inspiration → 可 Create Myself 进 Creation，或对样片 Remix / Extend。自己的成片在 My Remixes，放大播放与 Inspiration 共用样式，可再 Remix / Extend。</p>
+<p class="note">本期不做：强制看完灵感才能创作；看 prompt 付费；Extend 他人单独加价；重社区（关注/评论）；底部播放页 Film Scenes 等入口（隐藏保留）。</p>
+
+<h2>6. 业务流程图</h2>
+<pre>flowchart LR
+  Watch[短剧播放] --> RemixBtn[点 Remix 并暂停播放]
+  RemixBtn --> Insp[Inspiration]
+  Insp --> Create[Create Myself / Remix 进 Creation]
+  Insp --> Ext[Extend 他人样片]
+  Insp --> View[放大播放]
+  View --> Ext
+  View --> Create
+  Create --> Gen[Generate 扣费]
+  Ext --> Gen2[Extend 扣费 同 Remix 价]
+  Gen --> Mine[My Remixes]
+  Gen2 --> Mine
+  Mine --> View2[同一套放大页]
+  View2 --> Create
+  View2 --> Ext2[再 Extend]
+</pre>
+
+<h2>7. 交互流程图</h2>
+<pre>flowchart TD
+  A[播放页右侧 Remix] --> B[Inspiration 瀑布流]
+  B --> C{点击 clip}
+  C -->|memberOnly 且非 Plus| D[unlockBlur 会员墙]
+  C -->|可看| E[放大播放页]
+  B --> F[底栏 Create Myself]
+  F --> G[Creation]
+  E --> H[Extend]
+  E --> I[Remix 带入 Creation]
+  G --> J[Intent / 刷新 / @ / 规格]
+  J --> K[Generate]
+</pre>
+
+<h2>8. 详细方案</h2>
+<table>
+<tr><th style="width:14%">一级模块</th><th style="width:16%">二级功能</th><th style="width:14%">原型</th><th>描述</th></tr>
+<tr>
+<td rowspan="3">入口</td>
+<td>播放页 Remix</td>
+<td>short-drama-watch</td>
+<td>
+<p>【页面元素】全屏播放；右侧操作列 🎬 Remix。底部 Film Scenes 等隐藏保留。</p>
+<p>【交互说明】1. 点 Remix → 暂停短剧播放。2. 进入 Inspiration。</p>
+<p>【功能逻辑】进入 Remix 必须 pause，写入后续实现与 PRD。</p>
+</td>
+</tr>
+<tr>
+<td>默认 Inspiration</td>
+<td>drama-remix ideas</td>
+<td>
+<p>【页面元素】标题 Inspiration；本剧瀑布流；分割线「More from Soulove」；双列 9:16/横屏混排；底栏悬浮 Create Myself（#ee0097）。</p>
+<p>【交互说明】1. 视口内 clip 静音自动播（含模糊条）。2. 点击 clip → 放大播放。3. Create Myself → Creation。</p>
+<p>【文案规范】Create Myself；More from Soulove；Extend；Remix。</p>
+</td>
+</tr>
+<tr>
+<td>样片可见性</td>
+<td>CMS 模拟</td>
+<td>
+<p>【功能逻辑】每条可配 memberOnly、plats[]。Web Demo 过滤非 web/all。memberOnly 且非 Plus：马赛克仍播放。</p>
+<p>【前置条件与权限】点模糊样片走 unlockBlur（与解锁 private photo 同墙），不用短剧付费墙。</p>
+<p>【数据与内容规则】Prompt 全文可看，不拦截。商业化在制作。</p>
+</td>
+</tr>
+<tr>
+<td rowspan="2">放大播放</td>
+<td>共用播放页</td>
+<td>idea-view / viewer</td>
+<td>
+<p>【页面元素】全屏视频、时长/画质、作者或段数、cast、prompt、进度条；多段 shot chips；Extend + Remix。</p>
+<p>【交互说明】Inspiration 与 My Remixes 点 clip 进入同一套样式。模糊样例放大后仍播马赛克片。</p>
+</td>
+</tr>
+<tr>
+<td>Remix 自己的 clip</td>
+<td>My Remixes</td>
+<td>
+<p>【交互说明】对结果不满意可 Remix：带入 Creation（角色+prompt）再生成。Extend 仍为尾帧续写合并。</p>
+<p>【功能逻辑】Extend 他人与自己 Remix 提交价一致，走配置。</p>
+</td>
+</tr>
+<tr>
+<td rowspan="4">Creation / Extend</td>
+<td>运营预设</td>
+<td>create</td>
+<td>
+<p>【功能逻辑】每剧配置多套 castIds+prompt。进页用第一套。刷新换下一套并清空用户自选角色。</p>
+<p>【交互说明】↻ 为工具级，可覆盖已选 Intent。</p>
+</td>
+</tr>
+<tr>
+<td>角色选择</td>
+<td>create / extend</td>
+<td>
+<p>【页面元素】My Characters 固定；右侧本剧角色横滑点选，最多 3。</p>
+<p>【交互说明】@ 仅已选 cast。My Characters 弹窗 Tab：Recent chats / My lovers。</p>
+<p>【边界说明】超过 3 人 Toast。</p>
+</td>
+</tr>
+<tr>
+<td>Intent</td>
+<td>create / extend</td>
+<td>
+<p>【页面元素】输入框下单行横滑 chips，文案可运营配置。</p>
+<p>【功能逻辑】方案 B：尽量保留角色；按槽位性别从本剧补女主/男主；重写动作 prompt。Creation 与 Extend 统一。</p>
+</td>
+</tr>
+<tr>
+<td>生成规格</td>
+<td>create / extend</td>
+<td>
+<p>【页面元素】5s · 480P ›；弹层 5s/10s、480P/720P。Generate/Extend 主按钮。</p>
+<p>【功能逻辑】Guest 先登录；Gems 不足弹 Gems 墙；成功进 My Remixes，生成中不可 Extend。</p>
+<p>【页面元素】Extend 顶部左播成片、右尾帧。</p>
+</td>
+</tr>
+</table>
+
+<h2>9. 异常与边界</h2>
+<table>
+<tr><th>场景</th><th>表现</th></tr>
+<tr><td>Guest 点 Generate / Extend</td><td>登录墙</td></tr>
+<tr><td>Gems 不足</td><td>Gems 墙，不提交</td></tr>
+<tr><td>memberOnly + 非 Plus 点 clip</td><td>unlockBlur 会员墙；列表/放大页马赛克仍可播</td></tr>
+<tr><td>plats 不含当前端</td><td>不展示该示例</td></tr>
+<tr><td>生成中</td><td>不可 Extend</td></tr>
+<tr><td>Intent 缺性别角色</td><td>从本剧池补；仍不足则 Toast</td></tr>
+</table>
+
+<h2>10. 时序图</h2>
+<pre>sequenceDiagram
+  actor U as User
+  participant W as 播放页
+  participant I as Inspiration
+  participant C as Creation
+  participant P as 会员/登录/Gems
+  participant G as 生成
+  U->>W: 点 Remix
+  W->>W: pause
+  W->>I: 打开 Inspiration
+  alt 点模糊样片且非 Plus
+    I->>P: unlockBlur
+  else Create Myself / Remix
+    I->>C: 进入创作
+    U->>C: Intent 或手写后 Generate
+    alt Guest
+      C->>P: 登录
+    else Gems 不足
+      C->>P: Gems 墙
+    else 通过
+      C->>G: 扣费排队
+      G-->>U: My Remixes 生成中→完成
+    end
+  end
+</pre>
+
+<h2>11. 上线计划</h2>
+<p>排期、灰度、开关：待确认。Demo 仅用于方案评审，不代表已上线。</p>
+
+<p class="note">数据埋点：本期不补，不编造事件名与指标。</p>
+</main>
+</body>
+</html>
