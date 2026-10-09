@@ -1,3 +1,1 @@
-# Soulove Product Demo
-
-Open the GitHub Pages URL after deploy.
+Live: https://waterloo2135.github.io/soulove-product-demo-pages/
