@@ -1043,7 +1043,7 @@ export function ShortDramaWatchScreen() {
                   >
                     {gemsLockedCurrent ? "Unlock with Gems" : "Upgrade to unlock"}
                   </button>
-                  {memberLockChatVariant && !gemsLockedCurrent ? (
+                  {!gemsLockedCurrent ? (
                     <MemberLockChatButton lead={lead} onClick={openMemberLockChat} />
                   ) : null}
                   {showTaskCta ? (
