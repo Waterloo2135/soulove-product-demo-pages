@@ -6,6 +6,7 @@ import { useStore } from "../store";
 import type { SubscribeScene } from "../types";
 import { ShortDramaPaywallHost } from "./ShortDramaPaywall";
 import { ShortDramaPaywall2Host } from "./ShortDramaPaywall2";
+import { ShortDramaGemsUnlock } from "./ShortDramaGemsUnlock";
 
 function DramaRecommendDialog() {
   const store = useStore();
@@ -181,7 +182,7 @@ function GemPackGrid({ packId, setPackId }: { packId: string; setPackId: (id: st
 function SubscribeDialog({ scene }: { scene: SubscribeScene }) {
   const store = useStore();
   const copy = SUB_SCENES[scene] || SUB_SCENES.generic;
-  const [planId, setPlanId] = useState("month");
+  const [planId, setPlanId] = useState(store.overlay?.message === "dramaPass" ? "life" : "month");
   return (
     <div className="sub-dlg">
       <button className="sub-close" onClick={() => store.dispatch({ type: "closeOverlay" })}>
@@ -247,8 +248,16 @@ function SubscribeDialog({ scene }: { scene: SubscribeScene }) {
               type="button"
               className={"sub-pay-way " + item.cls}
               onClick={() => {
-                store.dispatch({ type: "setPersona", persona: "plus" });
-                store.toast("Plus unlocked · " + item.way);
+                if (store.persona !== "plus") {
+                  store.dispatch({ type: "setPersona", persona: "plus" });
+                }
+                if (store.overlay?.message === "dramaPass" || planId === "life") {
+                  store.dispatch({ type: "setDramaPass", dramaPass: true });
+                  store.dispatch({ type: "closeOverlay" });
+                  store.toast("Pro / Lifetime · all short dramas unlocked");
+                } else {
+                  store.toast("Plus unlocked · " + item.way);
+                }
               }}
             >
               <span className="sub-pay-ico" aria-hidden>
@@ -281,16 +290,20 @@ export function OverlayHost() {
     return <DramaRecommendDialog />;
   }
 
-  if (overlay.type === "shortDrama" || (overlay.type === "subscribe" && overlay.scene === "shortDrama")) {
+  if (overlay.type === "shortDrama") {
     return <ShortDramaPaywallHost />;
   }
 
-  if (overlay.type === "shortDrama2") {
+  if (overlay.type === "shortDrama2" || (overlay.type === "subscribe" && overlay.scene === "shortDrama")) {
     return <ShortDramaPaywall2Host />;
   }
 
   if (overlay.type === "subscribe") {
     return <SubscribeDialog scene={(overlay.scene || "generic") as SubscribeScene} />;
+  }
+
+  if (overlay.type === "dramaGems") {
+    return <ShortDramaGemsUnlock />;
   }
 
   if (overlay.type === "gems") {

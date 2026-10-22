@@ -17,6 +17,8 @@ const JUMPS: Array<{ id: ScreenId; label: string; params?: Record<string, string
   { id: "generate-result", label: "生图失败", params: { type: "photo", id: "elena", status: "fail" } },
   { id: "generate-result", label: "生视频结果", params: { type: "video", id: "elena", status: "success" } },
   { id: "short-drama", label: "短剧" },
+  { id: "short-drama-watch", label: "会员锁集 · 聊天分流", params: { id: "d1", ep: "2", autoplay: "0", variant: "member-lock-chat" } },
+  { id: "short-drama-watch", label: "会员锁集 · 无数字人", params: { id: "d1", ep: "2", autoplay: "0", variant: "member-lock-chat", cast: "none" } },
   { id: "short-drama-watch", label: "横屏短剧", params: { id: "d2", land: "1", autoplay: "1" } },
   { id: "film-scenes", label: "Film Scenes", params: { id: "d1" } },
   { id: "drama-remix", label: "短剧 Remix", params: { id: "d1" } },
@@ -106,7 +108,8 @@ export function DemoLab() {
         ))}
         <button onClick={() => store.dispatch({ type: "openOverlay", overlay: { type: "gems" } })}>Gems 不足</button>
         <button onClick={() => store.dispatch({ type: "openOverlay", overlay: { type: "bonus" } })}>新用户奖励</button>
-        <button onClick={() => store.dispatch({ type: "openOverlay", overlay: { type: "shortDrama2" } })}>ShortDrama2</button>
+        <button onClick={() => store.dispatch({ type: "openOverlay", overlay: { type: "shortDrama2" } })}>ShortDrama2 新方案</button>
+        <button onClick={() => store.dispatch({ type: "openOverlay", overlay: { type: "shortDrama" } })}>旧版短剧付费墙</button>
       </div>
       <h2>需求说明</h2>
       <SpecPane screenId={store.current.id} />

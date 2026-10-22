@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { CHARACTERS } from "../mock";
+import { CHARACTERS, characterById } from "../mock";
 import { useStore } from "../store";
 
 const GIFTS = [
@@ -265,14 +265,33 @@ export function AskMediaSheet({ tab }: { tab: "image" | "video" }) {
 
   const choose = (id: string, label: string) => {
     setPicked(id);
-    if (store.persona !== "plus") {
+    if (media === "video") {
+      if (store.persona !== "plus") {
+        store.dispatch({
+          type: "openOverlay",
+          overlay: { type: "subscribe", scene: "askVideo" },
+        });
+        return;
+      }
+      store.toast("Asked video: " + label);
+      return;
+    }
+    const girl = characterById(store.current.params?.id);
+    const freeAsk = store.persona === "plus" || store.askPhotoCount < 2;
+    if (!freeAsk) {
       store.dispatch({
         type: "openOverlay",
-        overlay: { type: "subscribe", scene: media === "video" ? "askVideo" : "askPhoto" },
+        overlay: { type: "subscribe", scene: "askPhoto" },
       });
       return;
     }
-    store.toast((media === "video" ? "Asked video: " : "Asked photo: ") + label);
+    store.dispatch({
+      type: "askPhotoDone",
+      characterId: girl.id,
+      src: girl.image,
+      mosaic: store.persona !== "plus",
+    });
+    store.dispatch({ type: "closeOverlay" });
   };
 
   const toggleSpicy = () => {

@@ -27,6 +27,17 @@ type State = {
   sentCount: Record<string, number>;
   createdName: string;
   dramaPlat: boolean;
+  askPhotoCount: number;
+  askPhotos: Record<string, Array<{ src: string; mosaic: boolean }>>;
+  dramaTaskUsed: boolean;
+  dramaTask: {
+    dramaId: string;
+    episode: number;
+    characterId: string;
+    completed: boolean;
+  } | null;
+  gemsUnlocked: Record<string, number[]>;
+  dramaPass: boolean;
 };
 
 type Action =
@@ -43,7 +54,12 @@ type Action =
   | { type: "setCreateStep"; step: number }
   | { type: "setCreatedName"; name: string }
   | { type: "bumpSent"; characterId: string }
-  | { type: "setDramaPlat"; dramaPlat: boolean };
+  | { type: "setDramaPlat"; dramaPlat: boolean }
+  | { type: "startDramaTask"; dramaId: string; episode: number; characterId: string }
+  | { type: "askPhotoDone"; characterId: string; src: string; mosaic: boolean }
+  | { type: "watchDramaTask" }
+  | { type: "unlockDramaGems"; dramaId: string; episodes: number[]; cost: number }
+  | { type: "setDramaPass"; dramaPass: boolean };
 
 const PERSONA_GEMS: Record<Persona, number> = { guest: 0, free: 12, plus: 120 };
 
@@ -58,6 +74,12 @@ const initial: State = {
   sentCount: {},
   createdName: "",
   dramaPlat: true,
+  askPhotoCount: 0,
+  askPhotos: {},
+  dramaTaskUsed: false,
+  dramaTask: null,
+  gemsUnlocked: {},
+  dramaPass: false,
 };
 
 function reducer(state: State, action: Action): State {
@@ -69,6 +91,12 @@ function reducer(state: State, action: Action): State {
         gems: PERSONA_GEMS[action.persona],
         overlay: null,
         sentCount: {},
+        askPhotoCount: 0,
+        askPhotos: {},
+        dramaTaskUsed: false,
+        dramaTask: null,
+        gemsUnlocked: {},
+        dramaPass: false,
       };
     case "setGems":
       return { ...state, gems: action.gems };
@@ -95,6 +123,65 @@ function reducer(state: State, action: Action): State {
     case "bumpSent": {
       const current = state.sentCount[action.characterId] || 0;
       return { ...state, sentCount: { ...state.sentCount, [action.characterId]: current + 1 } };
+    }
+    case "startDramaTask": {
+      if (state.dramaTaskUsed) return state;
+      return {
+        ...state,
+        dramaTask: {
+          dramaId: action.dramaId,
+          episode: action.episode,
+          characterId: action.characterId,
+          completed: false,
+        },
+      };
+    }
+    case "askPhotoDone": {
+      const list = state.askPhotos[action.characterId] || [];
+      let dramaTask = state.dramaTask;
+      let dramaTaskUsed = state.dramaTaskUsed;
+      if (
+        !dramaTaskUsed &&
+        dramaTask &&
+        !dramaTask.completed &&
+        dramaTask.characterId === action.characterId
+      ) {
+        dramaTaskUsed = true;
+        dramaTask = { ...dramaTask, completed: true };
+      }
+      return {
+        ...state,
+        askPhotoCount: state.askPhotoCount + 1,
+        askPhotos: {
+          ...state.askPhotos,
+          [action.characterId]: [...list, { src: action.src, mosaic: action.mosaic }],
+        },
+        dramaTaskUsed,
+        dramaTask,
+      };
+    }
+    case "setDramaPass":
+      return { ...state, dramaPass: action.dramaPass };
+    case "unlockDramaGems": {
+      if (action.cost > state.gems) return state;
+      const prev = state.gemsUnlocked[action.dramaId] || [];
+      const merged = Array.from(new Set([...prev, ...action.episodes]));
+      return {
+        ...state,
+        gems: state.gems - action.cost,
+        gemsUnlocked: { ...state.gemsUnlocked, [action.dramaId]: merged },
+      };
+    }
+    case "watchDramaTask": {
+      const task = state.dramaTask;
+      if (!task || !task.completed) return state;
+      const item = {
+        id: "short-drama-watch" as const,
+        params: { id: task.dramaId, ep: String(task.episode), play: "1" },
+      };
+      const idx = [...state.stack].map((entry) => entry.id).lastIndexOf("short-drama-watch");
+      const stack = idx >= 0 ? [...state.stack.slice(0, idx), item] : [...state.stack.slice(0, -1), item];
+      return { ...state, stack, overlay: null };
     }
     case "setDramaPlat": {
       const hideDrama = !action.dramaPlat;

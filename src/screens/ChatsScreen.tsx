@@ -1,6 +1,13 @@
 import { CHARACTERS, SESSIONS } from "../mock";
 import { useStore } from "../store";
 
+const CHATS_BANNERS = [
+  {
+    id: "create-lover",
+    image: "https://d2tntkfu60is0z.cloudfront.net/sl/banner/08d3a0d7fe6d490ab622d55338b50458.png",
+  },
+];
+
 export function ChatsScreen() {
   const store = useStore();
   return (
@@ -22,6 +29,20 @@ export function ChatsScreen() {
           )}
         </div>
       </div>
+
+      <div className="chats-banner">
+        {CHATS_BANNERS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className="chats-banner-card"
+            onClick={() => store.requireUser(() => store.push("create-character"))}
+          >
+            <img src={item.image} alt="" />
+          </button>
+        ))}
+      </div>
+
       <div className="session-list">
         {SESSIONS.map((session) => {
           const girl = CHARACTERS.find((item) => item.id === session.characterId);
@@ -34,7 +55,9 @@ export function ChatsScreen() {
             >
               <div className="session-ava-wrap">
                 <img className="session-ava" src={girl.image} alt="" />
-                {session.unread ? <span className="session-unread">{session.unread > 99 ? "99+" : session.unread}</span> : null}
+                {session.unread ? (
+                  <span className="session-unread">{session.unread > 99 ? "99+" : session.unread}</span>
+                ) : null}
               </div>
               <div className="session-main">
                 <div className="session-top">

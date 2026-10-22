@@ -72,6 +72,17 @@ export function dramaBadge(
   return null;
 }
 
+
+export function sortAllDramas<T extends { id: string; publishedAt: number; lastEpisodeAt: number }>(items: readonly T[]): T[] {
+  return items
+    .map((item, index) => ({ item, index, isNew: dramaBadge(item) === "NEW" }))
+    .sort((a, b) => {
+      if (a.isNew !== b.isNew) return a.isNew ? -1 : 1;
+      return a.index - b.index;
+    })
+    .map((row) => row.item);
+}
+
 export function markDramaRecommendShown() {
   try {
     localStorage.setItem(SHOWN_KEY, String(Date.now()));

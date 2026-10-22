@@ -59,7 +59,7 @@ function Screen() {
     case "short-drama":
       return <ShortDramaScreen />;
     case "short-drama-watch":
-      return <ShortDramaWatchScreen />;
+      return <ShortDramaWatchScreen key={[current.params?.id, current.params?.variant, current.params?.cast].join(":")} />;
     case "film-scenes":
       return <FilmScenesScreen />;
     case "drama-remix":

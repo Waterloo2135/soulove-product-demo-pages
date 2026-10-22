@@ -1,19 +1,63 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
-import { CHARACTERS, DRAMAS } from "../mock";
+import { DRAMAS } from "../mock";
 import { useStore } from "../store";
 
 /** Real short-drama character retention VO. Some dramas are motion-only. */
-const RETENTION_VO_URL = "https://d2tntkfu60is0z.cloudfront.net/sl/config/bbfe026ad76349aaaa63b0e75d9c06f1.mp4";
-const BIKINI_PIC = "https://images.unsplash.com/photo-1583900985737-6d0495555783?auto=format&fit=crop&w=400&q=80";
+const RETENTION_VO_URL = "https://d2tntkfu60is0z.cloudfront.net/sl/config/335bcdd7c8fb408287b3c0904f742e70.mp4";
+
+const FAN_LAYOUT = [
+  { w: 72, h: 96, rotate: -10, left: -25, top: 29.5, z: 1, pos: "22% 40%" },
+  { w: 81, h: 108, rotate: -5, left: 53, top: 12, z: 2, pos: "38% 32%" },
+  { w: 90, h: 120, rotate: 0, left: 143, top: 0, z: 5, pos: "50% 50%" },
+  { w: 81, h: 108, rotate: 5, left: 233, top: 10, z: 3, pos: "62% 32%" },
+  { w: 72, h: 96, rotate: 10, left: 313, top: 30, z: 1, pos: "78% 40%" },
+] as const;
+
+const FEATURES: { label: string; badge?: string; icon: ReactNode }[] = [
+  {
+    label: "More Spicy\nSeries",
+    icon: (
+      <svg viewBox="0 0 20 20" width="20" height="20" fill="currentColor" aria-hidden>
+        <rect x="1" y="1" width="7.4" height="7.4" rx="1.6" />
+        <rect x="11.6" y="1" width="7.4" height="7.4" rx="1.6" />
+        <rect x="1" y="11.6" width="7.4" height="7.4" rx="1.6" />
+        <rect x="11.6" y="11.6" width="7.4" height="7.4" rx="1.6" />
+      </svg>
+    ),
+  },
+  {
+    label: "NSFW Chat with\nHer",
+    badge: "N",
+    icon: (
+      <svg viewBox="0 0 20 20" width="20" height="20" fill="currentColor" aria-hidden>
+        <path d="M3.2 3.4h13.6c.9 0 1.6.7 1.6 1.6v7.4c0 .9-.7 1.6-1.6 1.6H8.1L4 17.6V14H3.2c-.9 0-1.6-.7-1.6-1.6V5c0-.9.7-1.6 1.6-1.6Z" />
+      </svg>
+    ),
+  },
+  {
+    label: "Ask her for\nSpicy Videos",
+    icon: (
+      <svg viewBox="0 0 20 20" width="20" height="20" fill="currentColor" aria-hidden>
+        <rect x="1.4" y="5.2" width="11.4" height="9.6" rx="2.2" />
+        <path d="M13.6 8.1 18.2 5.6v8.8l-4.6-2.5V8.1Z" />
+      </svg>
+    ),
+  },
+  {
+    label: "Ask her for any\nPics",
+    icon: (
+      <svg viewBox="0 0 20 20" width="20" height="20" fill="currentColor" aria-hidden>
+        <rect x="2" y="3.6" width="16" height="12.8" rx="2.2" />
+        <circle cx="7.1" cy="8.1" r="1.5" fill="#1A101C" />
+        <path d="M4.4 14.4 8.2 10.8l2.3 2.2 3.1-3.6 3.8 5H4.4Z" fill="#1A101C" />
+      </svg>
+    ),
+  },
+];
 
 function useDrama() {
   const store = useStore();
   return DRAMAS.find((item) => item.id === store.current.params?.id) || DRAMAS[0];
-}
-
-function herAvatar(drama: ReturnType<typeof useDrama>) {
-  const id = drama.actors[0]?.characterId;
-  return CHARACTERS.find((item) => item.id === id)?.image || drama.actors[0]?.avatar || drama.cover;
 }
 
 function unlockPlus(store: ReturnType<typeof useStore>, way: string) {
@@ -128,85 +172,70 @@ function ShortDrama2Hero({ onDismiss }: { onDismiss: () => void }) {
   );
 }
 
-function PerkCard({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="sd2-perk">
-      <div className="sd2-perk-stage">{children}</div>
-      <span>{label}</span>
-    </div>
-  );
-}
-
 function ShortDrama2More({ onLater }: { onLater: () => void }) {
   const store = useStore();
   const drama = useDrama();
-  const avatar = herAvatar(drama);
+  const poster = drama.watchCover || drama.cover;
   const covers = useMemo(() => {
-    const list = DRAMAS.filter((item) => item.id !== "d-landing").map((item) => item.cover);
-    while (list.length < 4) list.push(drama.cover);
-    return list.slice(0, 4);
-  }, [drama]);
+    const rest = DRAMAS.map((item) => item.cover).filter((src) => src !== poster);
+    return FAN_LAYOUT.map((_, index) => (index === 2 ? poster : rest[index] || rest[0] || poster));
+  }, [poster]);
 
   return (
     <div className="sd2-more-root" onClick={onLater}>
-      <div className="sd2-more-card" onClick={(event) => event.stopPropagation()}>
-        <h2>Not just this episode</h2>
-        <p className="sd2-more-sub">
-          Prime keeps <em>her</em> — spicy series, chat, pics, and videos.
-        </p>
-        <div className="sd2-perks">
-          <PerkCard label="More spicy series">
-            <div className="sd2-mini-series">
-              {covers.map((src, index) => (
-                <img key={src + index} src={src} alt="" />
-              ))}
-            </div>
-          </PerkCard>
-          <PerkCard label="NSFW chat with her">
-            <div className="sd2-mini-chat">
-              <div className="sd2-mini-her">
-                <img src={avatar} alt="" />
-                <p>Don't stop watching me...</p>
+      <div className="sd2-more-sheet" onClick={(event) => event.stopPropagation()}>
+        <div className="sd2-more-head">
+          <h2>Not just this episode</h2>
+          <p className="sd2-more-sub">Prime keeps her — spicy series, chat, pics, and videos.</p>
+        </div>
+        <div className="sd2-fan" aria-hidden>
+          {covers.map((src, index) => {
+            const layout = FAN_LAYOUT[index];
+            return (
+              <div
+                key={src + index}
+                className="sd2-fan-box"
+                style={{
+                  left: layout.left,
+                  top: layout.top,
+                  zIndex: layout.z,
+                }}
+              >
+                <img
+                  src={src}
+                  alt=""
+                  style={{
+                    width: layout.w,
+                    height: layout.h,
+                    objectPosition: layout.pos,
+                    transform: "rotate(" + layout.rotate + "deg)",
+                  }}
+                />
               </div>
-              <p className="sd2-mini-me">come chat with me</p>
-              <div className="sd2-mini-her">
-                <img src={avatar} alt="" />
-                <p>I'll be as dirty as you want.</p>
-              </div>
+            );
+          })}
+        </div>
+        <div className="sd2-features">
+          {FEATURES.map((item) => (
+            <div key={item.label} className="sd2-feat">
+              <span className="sd2-feat-ico">{item.icon}</span>
+              <span className="sd2-feat-label">{item.label}</span>
+              {item.badge ? <i className="sd2-feat-n">{item.badge}</i> : null}
             </div>
-          </PerkCard>
-          <PerkCard label="Ask her for any pics">
-            <div className="sd2-mini-chat">
-              <p className="sd2-mini-me">show me a pic of you in a bikini</p>
-              <div className="sd2-mini-her">
-                <img src={avatar} alt="" />
-                <div className="sd2-mini-media">
-                  <img src={BIKINI_PIC} alt="" />
-                </div>
-              </div>
-            </div>
-          </PerkCard>
-          <PerkCard label="Ask her for spicy videos">
-            <div className="sd2-mini-chat">
-              <p className="sd2-mini-me">show me a video of blowjob</p>
-              <div className="sd2-mini-her">
-                <img src={avatar} alt="" />
-                <div className="sd2-mini-media">
-                  <img src={drama.watchCover || drama.cover} alt="" />
-                  <i className="sd2-perk-play" aria-hidden />
-                </div>
-              </div>
-            </div>
-          </PerkCard>
+          ))}
         </div>
         <div className="sd2-more-box">
-          <b>Only $0.33/day</b>
+          <b>
+            Only <em>$0.33</em>/day
+          </b>
           <span className="sd2-plan">Prime: 1 Month, Total $9.99</span>
         </div>
-        <StayOrPay onPay={(way) => unlockPlus(store, way)} />
-        <button type="button" className="sd2-later" onClick={onLater}>
-          Maybe Later
-        </button>
+        <div className="sd2-more-cta">
+          <StayOrPay onPay={(way) => unlockPlus(store, way)} />
+          <button type="button" className="sd2-later" onClick={onLater}>
+            Maybe Later
+          </button>
+        </div>
       </div>
     </div>
   );

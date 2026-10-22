@@ -286,6 +286,39 @@ function GridFeed({ tab }: { tab: "hot" | "new" }) {
   );
 }
 
+function LoverCard({
+  item,
+  onClick,
+}: {
+  item: Character;
+  onClick: () => void;
+}) {
+  const relation = item.tags[0] || item.tag;
+  const occupation = item.tags[1];
+  return (
+    <button type="button" className="lover-card" onClick={onClick}>
+      <img src={item.image} alt={item.name} />
+      <div className="lover-scrim" />
+      <div className="lover-meta">
+        <div className="lover-name-row">
+          <div className="lover-name">{item.name}</div>
+          <span className="lover-cake" aria-hidden>
+            🎂
+          </span>
+          <div className="lover-age">{item.age}</div>
+        </div>
+        {relation || occupation ? (
+          <div className="lover-tags">
+            {relation ? <span className="lover-tag-item">{relation}</span> : null}
+            {relation && occupation ? <span className="lover-tag-sep" /> : null}
+            {occupation ? <span className="lover-tag-item shrink">{occupation}</span> : null}
+          </div>
+        ) : null}
+      </div>
+    </button>
+  );
+}
+
 function LoverFeed() {
   const store = useStore();
   const mine = CHARACTERS.slice(0, 4);
@@ -294,22 +327,21 @@ function LoverFeed() {
     <div className="home-lover">
       {guest ? (
         <div className="lover-empty">
-          <p>Create your dream AI girlfriend and start chatting.</p>
+          <div className="lover-empty-title">
+            Create your own
+            <br />
+            AI Girlfriend
+          </div>
+          <p>Customize her look, personality, and story. Start chatting in minutes.</p>
         </div>
       ) : (
-        <div className="lover-grid">
+        <div className="lover-grid home-lover-grid">
           {mine.map((item) => (
-            <button
+            <LoverCard
               key={item.id}
-              className="lover-card"
+              item={item}
               onClick={() => store.push("character-detail", { id: item.id })}
-            >
-              <img src={item.image} alt={item.name} />
-              <div className="lover-meta">
-                <div className="lover-name">{item.name}</div>
-                <div className="lover-tag">{item.tag}</div>
-              </div>
-            </button>
+            />
           ))}
         </div>
       )}

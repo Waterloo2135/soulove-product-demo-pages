@@ -42,7 +42,8 @@ export type OverlayType =
   | "gift"
   | "dress"
   | "askMedia"
-  | "dramaRecommend";
+  | "dramaRecommend"
+  | "dramaGems";
 
 export type SubscribeScene =
   | "generic"
@@ -63,6 +64,8 @@ export type Overlay = {
   scene?: SubscribeScene;
   message?: string;
   tab?: "image" | "video";
+  dramaId?: string;
+  episode?: number;
 } | null;
 
 export type NavItem = {
@@ -106,8 +109,12 @@ export type Drama = {
   title: string;
   cover: string;
   watchCover: string;
+  nsfwCover?: string;
   episodes: number;
   lockedFrom: number;
+  gemsFrom?: number;
+  unlockAllPrice?: number;
+  episodeGemPrice?: number;
   episodeTitle: string;
   synopsis: string;
   likeCount: string;

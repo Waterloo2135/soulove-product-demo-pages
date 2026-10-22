@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "
 import { CHARACTERS, DRAMAS, GEM_PACKS, characterById } from "../mock";
 import { IconBack } from "../components/Icons";
 import { UpgradeMembershipScreen } from "../../variants/会员订阅套餐/UpgradeMembership";
-import { dramaBadge, getRecentDramaIds } from "../dramaGuide";
+import { MemberLockChatButton } from "../../variants/短剧锁集聊天/MemberLockChatButton";
+import { dramaBadge, getRecentDramaIds, sortAllDramas } from "../dramaGuide";
 import { useStore } from "../store";
 import type { ScreenId } from "../types";
 
@@ -175,10 +176,13 @@ function DramaRecentRail({
           type="button"
           data-id={item.id}
           className="drama-recent-card"
-          onClick={(ev) => ev.preventDefault()}
+          onClick={(ev) => {
+            ev.preventDefault();
+            if (!drag.current.moved) onOpen(item.id);
+          }}
         >
           <span className="drama-recent-cover">
-            <img src={item.cover} alt="" draggable={false} />
+            <img src={item.cover} alt={item.title} draggable={false} />
             <DramaFlag kind={dramaBadge(item) === "Update" ? "Update" : null} />
           </span>
           <em>{item.title}</em>
@@ -190,33 +194,57 @@ function DramaRecentRail({
 
 export function ShortDramaScreen() {
   const store = useStore();
+  const pageRef = useRef<HTMLDivElement>(null);
+  const catalog = sortAllDramas(DRAMAS.filter((item) => item.id !== "d-landing"));
   const recent = getRecentDramaIds()
-    .map((id) => DRAMAS.find((item) => item.id === id))
+    .map((id) => DRAMAS.find((item) => item.id === id && item.id !== "d-landing"))
     .filter((item): item is (typeof DRAMAS)[number] => Boolean(item));
+
+  useEffect(() => {
+    const screen = pageRef.current?.closest(".screen");
+    if (screen instanceof HTMLElement) screen.scrollTop = 0;
+  }, [store.current.id]);
+
+  const openWatch = (id: string) => store.push("short-drama-watch", { id });
+
   return (
-    <div className="drama-tab-page">
+    <div className="drama-tab-page" ref={pageRef}>
       <div className="shorts-page">
         <div className="drama-hero">
           <img src={SHORTS_HERO} alt="" />
           <div className="drama-hero-top">
-            <h1 className="drama-hero-title">Drama<span className="drama-hero-spark" aria-hidden>✦</span></h1>
+            <h1 className="drama-hero-title">
+              Drama<span className="drama-hero-spark" aria-hidden>
+                ✦
+              </span>
+            </h1>
             {store.persona === "guest" ? (
-              <button className="ui-login" onClick={() => store.requireUser()}>Log in</button>
+              <button className="ui-login" onClick={() => store.requireUser()}>
+                Log in
+              </button>
             ) : (
-              <button className="ui-gems" onClick={() => store.push("tokens")}>💎 {store.gems}</button>
+              <button className="ui-gems" onClick={() => store.push("tokens")}>
+                💎 {store.gems}
+              </button>
             )}
           </div>
         </div>
+        <p className="shorts-sub">Binge her story. Unlock every episode with Plus.</p>
         {recent.length > 0 ? (
           <section className="drama-recent-sec">
             <h2 className="drama-sec-title">Continue Watching</h2>
-            <DramaRecentRail items={recent} onOpen={(id) => store.push("short-drama-watch", { id })} />
+            <DramaRecentRail items={recent} onOpen={openWatch} />
           </section>
         ) : null}
         <h2 className="drama-sec-title">All Dramas</h2>
         <div className="shorts-grid">
-          {DRAMAS.map((item) => (
-            <button key={item.id} className="shorts-card" onClick={() => store.push("short-drama-watch", { id: item.id })}>
+          {catalog.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className="shorts-card"
+              onClick={() => openWatch(item.id)}
+            >
               <img src={item.cover} alt={item.title} />
               <DramaFlag kind={dramaBadge(item)} />
             </button>
@@ -404,25 +432,64 @@ function PlayerLiveActors({
 
 export function ShortDramaWatchScreen() {
   const store = useStore();
-  const drama = DRAMAS.find((item) => item.id === store.current.params?.id) || DRAMAS[0];
+  const memberLockChatVariant = store.current.params?.variant === "member-lock-chat";
+  const configuredDrama = DRAMAS.find((item) => item.id === store.current.params?.id) || DRAMAS[0];
+  const drama = memberLockChatVariant && store.current.params?.cast === "none"
+    ? { ...configuredDrama, actors: [] }
+    : configuredDrama;
+  const lead = drama.actors[0];
   const autoplay = store.current.params?.autoplay !== "0";
   const fromLanding = store.current.params?.from === "landing";
   const resumeSec = Number(store.current.params?.t || 0) || 0;
   const firstFree = Math.max(1, Math.min(drama.lockedFrom - 1, drama.episodes) || 1);
-  const [playing, setPlaying] = useState(autoplay);
+  const paramEp = Number(store.current.params?.ep || 0);
+  const startEp = paramEp >= 1 && paramEp <= drama.episodes ? paramEp : firstFree;
+  const playNow = store.current.params?.play === "1";
   const [showMuteIcon, setShowMuteIcon] = useState(fromLanding);
-  const [episodesOpen, setEpisodesOpen] = useState(false);
+  const [episodesOpen, setEpisodesOpen] = useState(store.current.params?.eps === "1");
   const [filmOpen, setFilmOpen] = useState(false);
   const [plotOpen, setPlotOpen] = useState(false);
   const [plotPick, setPlotPick] = useState("");
   const [liked, setLiked] = useState(false);
-  const [currentEp, setCurrentEp] = useState(firstFree);
+  const [seriesEnded, setSeriesEnded] = useState(store.current.params?.ended === "1");
+  const [currentEp, setCurrentEp] = useState(startEp);
   const [currentSec, setCurrentSec] = useState(resumeSec);
   const [durationSec, setDurationSec] = useState(0);
   const [landMode, setLandMode] = useState(Boolean(drama.landscape) || store.current.params?.land === "1");
   const videoRef = useRef<HTMLVideoElement>(null);
+  const vipOpenedForEp = useRef<number | null>(null);
 
-  const isLocked = (ep: number) => ep >= drama.lockedFrom && store.persona !== "plus";
+  const isTaskUnlock = (ep: number) =>
+    Boolean(
+      store.dramaTaskUsed &&
+        store.dramaTask?.completed &&
+        store.dramaTask.dramaId === drama.id &&
+        store.dramaTask.episode === ep
+    );
+  const gemsFrom = drama.gemsFrom || 5;
+  const gemsUnlocked = store.gemsUnlocked[drama.id] || [];
+  const isGemsUnlocked = (ep: number) => gemsUnlocked.includes(ep);
+  const isPlayable = (ep: number) => {
+    if (store.dramaPass) return true;
+    if (isTaskUnlock(ep) || isGemsUnlocked(ep)) return true;
+    if (ep < drama.lockedFrom) return true;
+    if (store.persona !== "plus") return false;
+    return ep < gemsFrom;
+  };
+  const isLocked = (ep: number) => !isPlayable(ep);
+  const gemsLockedCurrent = isLocked(currentEp) && store.persona === "plus";
+  const lockedCurrent = isLocked(currentEp);
+  const taskReady = isTaskUnlock(currentEp) && !playNow;
+  const showTaskCta = gemsLockedCurrent && !store.dramaTaskUsed && Boolean(lead);
+  const [playing, setPlaying] = useState(() => {
+    if (isTaskUnlock(startEp) && !playNow) return false;
+    return playNow || autoplay;
+  });
+  const stageCover =
+    lockedCurrent || taskReady
+      ? drama.nsfwCover || drama.watchCover || drama.cover
+      : drama.watchCover || drama.cover;
+
   const openActorHome = (characterId: string) => {
     setEpisodesOpen(false);
     store.push("character-detail", { id: characterId, from: "short-drama" });
@@ -431,76 +498,81 @@ export function ShortDramaWatchScreen() {
     setEpisodesOpen(false);
     store.requirePlus("shortDrama");
   };
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    const onTime = () => setCurrentSec(video.currentTime || 0);
-    const onMeta = () => setDurationSec(video.duration || 0);
-    video.addEventListener("timeupdate", onTime);
-    video.addEventListener("loadedmetadata", onMeta);
-    return () => {
-      video.removeEventListener("timeupdate", onTime);
-      video.removeEventListener("loadedmetadata", onMeta);
-    };
-  }, [drama.id, currentEp]);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    const apply = async () => {
-      try {
-        if (resumeSec > 0 && currentEp === firstFree && Math.abs((video.currentTime || 0) - resumeSec) > 0.5) {
-          video.currentTime = resumeSec;
-        }
-        video.muted = fromLanding ? showMuteIcon : true;
-        if (isLocked(currentEp)) {
-          video.pause();
-          return;
-        }
-        if (playing) {
-          video.muted = true;
-          await video.play();
-        } else {
-          video.pause();
-        }
-      } catch {
-        // autoplay may be blocked; keep UI state
-      }
-    };
-    void apply();
-  }, [playing, resumeSec, drama.id, currentEp, firstFree, store.persona, fromLanding, showMuteIcon]);
-
-  const progress = durationSec > 0 ? Math.min(1, currentSec / durationSec) : playing ? 0.12 : 0;
-  const fmt = (sec: number) => {
-    const s = Math.max(0, Math.floor(sec));
-    return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
-  };
-  const epTitle = currentEp === 1 ? drama.episodeTitle : "Episode " + String(currentEp).padStart(2, "0");
-  const accessLabel = isLocked(currentEp) ? "VIP" : currentEp >= drama.lockedFrom ? "UNLOCKED" : "FREE";
-
-
-  const actors = drama.actors.length ? drama.actors : [{ name: "Elena", avatar: characterById("elena").image, characterId: "elena" }];
-
-  const lead = drama.actors[0];
-  const openRemix = () => {
-    setPlaying(false);
-    try { videoRef.current?.pause(); } catch { /* ignore */ }
-    store.push("drama-remix", { id: drama.id, ep: String(currentEp) });
-  };
-  const openLeadChat = () => {
-    store.push("chat-room", {
-      id: (lead && lead.characterId) || "elena",
-      from: "short-drama",
-      context: "You just watched " + drama.title + ". Continue this story with me.",
+  const openGemsForEpisode = (ep: number) => {
+    setEpisodesOpen(false);
+    store.dispatch({
+      type: "openOverlay",
+      overlay: { type: "dramaGems", dramaId: drama.id, episode: ep },
     });
   };
-  const selectLandEpisode = (ep: number) => {
-    if (isLocked(ep)) {
-      openVipForEpisode();
+
+  const persistWatchEp = (ep: number, extra?: Record<string, string>) => {
+    store.dispatch({
+      type: "replace",
+      item: {
+        id: "short-drama-watch",
+        params: { ...(store.current.params || {}), id: drama.id, ep: String(ep), ...(extra || {}) },
+      },
+    });
+  };
+
+  const goLockedEpisode = (ep: number) => {
+    setCurrentEp(ep);
+    setCurrentSec(0);
+    setDurationSec(0);
+    setPlaying(false);
+    persistWatchEp(ep);
+    if (store.persona === "plus") {
+      if (vipOpenedForEp.current !== ep) {
+        vipOpenedForEp.current = ep;
+        window.setTimeout(() => openGemsForEpisode(ep), 280);
+      }
       return;
     }
-    setCurrentEp(ep);
+    if (vipOpenedForEp.current !== ep) {
+      vipOpenedForEp.current = ep;
+      window.setTimeout(() => openVipForEpisode(), 280);
+    }
+  };
+
+  const startUnlockTask = () => {
+    if (!lead) return;
+    const characterId = lead.characterId;
+    persistWatchEp(currentEp);
+    store.dispatch({
+      type: "startDramaTask",
+      dramaId: drama.id,
+      episode: currentEp,
+      characterId,
+    });
+    store.push("chat-room", {
+      id: characterId,
+      from: "drama-task",
+      dramaId: drama.id,
+      ep: String(currentEp),
+      context: "You stopped at a locked episode of " + drama.title + ". Ask me for a photo.",
+    });
+  };
+
+  const playUnlockedEpisode = () => {
+    setPlaying(true);
+    setCurrentSec(0);
+    persistWatchEp(currentEp, { play: "1" });
+  };
+
+  const handleNaturalEnded = () => {
+    const next = currentEp + 1;
+    if (next > drama.episodes) {
+      setPlaying(false);
+      setSeriesEnded(true);
+      return;
+    }
+    if (isLocked(next)) {
+      goLockedEpisode(next);
+      return;
+    }
+    setCurrentEp(next);
+    setCurrentSec(0);
     setPlaying(true);
     const video = videoRef.current;
     if (video) {
@@ -512,56 +584,209 @@ export function ShortDramaWatchScreen() {
     }
   };
 
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const onTime = () => setCurrentSec(video.currentTime || 0);
+    const onMeta = () => setDurationSec(video.duration || 0);
+    const onEnded = () => handleNaturalEnded();
+    video.addEventListener("timeupdate", onTime);
+    video.addEventListener("loadedmetadata", onMeta);
+    video.addEventListener("ended", onEnded);
+    return () => {
+      video.removeEventListener("timeupdate", onTime);
+      video.removeEventListener("loadedmetadata", onMeta);
+      video.removeEventListener("ended", onEnded);
+    };
+  }, [drama.id, currentEp, store.persona]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const apply = async () => {
+      try {
+        if (lockedCurrent) {
+          video.pause();
+          try {
+            video.currentTime = 0;
+          } catch {
+            // ignore
+          }
+          return;
+        }
+        if (resumeSec > 0 && currentEp === firstFree && Math.abs((video.currentTime || 0) - resumeSec) > 0.5) {
+          video.currentTime = resumeSec;
+        }
+        video.muted = fromLanding ? showMuteIcon : true;
+        if (playing) {
+          video.muted = true;
+          await video.play();
+        } else {
+          video.pause();
+        }
+      } catch {
+        // autoplay may be blocked; keep UI state
+      }
+    };
+    void apply();
+  }, [playing, resumeSec, drama.id, currentEp, firstFree, store.persona, fromLanding, showMuteIcon, lockedCurrent]);
+
+  // Plus unlock mid-preview: allow play
+  useEffect(() => {
+    if (store.persona === "plus" && currentEp >= drama.lockedFrom) {
+      vipOpenedForEp.current = null;
+    }
+  }, [store.persona, currentEp, drama.lockedFrom]);
+
+  const progress = lockedCurrent
+    ? 0
+    : durationSec > 0
+      ? Math.min(1, currentSec / durationSec)
+      : playing
+        ? 0.12
+        : 0;
+  const fmt = (sec: number) => {
+    const s = Math.max(0, Math.floor(sec));
+    return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+  };
+  const epTitle = currentEp === 1 ? drama.episodeTitle : "Episode " + String(currentEp).padStart(2, "0");
+  const accessLabel = lockedCurrent
+    ? store.persona === "plus"
+      ? "GEMS"
+      : "VIP"
+    : currentEp >= gemsFrom || isGemsUnlocked(currentEp) || isTaskUnlock(currentEp)
+      ? "UNLOCKED"
+      : currentEp >= drama.lockedFrom
+        ? "UNLOCKED"
+        : "FREE";
+
+  const actors = drama.actors;
+  const openRemix = () => {
+    setPlaying(false);
+    try {
+      videoRef.current?.pause();
+    } catch {
+      /* ignore */
+    }
+    store.push("drama-remix", { id: drama.id, ep: String(currentEp) });
+  };
+  const openMemberLockChat = () => {
+    if (!lead) return;
+    setPlaying(false);
+    setEpisodesOpen(false);
+    persistWatchEp(currentEp, { autoplay: "0" });
+    store.push("chat-room", {
+      id: lead.characterId,
+      from: "short-drama-member-lock",
+      dramaId: drama.id,
+      ep: String(currentEp),
+      context: "You paused at a locked episode of " + drama.title + ". Continue this story with me.",
+    });
+  };
+  const openLeadChat = () => {
+    if (!lead) return;
+    store.push("chat-room", {
+      id: lead.characterId,
+      from: "short-drama",
+      context: "You just watched " + drama.title + ". Continue this story with me.",
+    });
+  };
+  const selectEpisode = (ep: number) => {
+    setSeriesEnded(false);
+    if (isLocked(ep)) {
+      setEpisodesOpen(false);
+      goLockedEpisode(ep);
+      return;
+    }
+    setEpisodesOpen(false);
+    setCurrentEp(ep);
+    setPlaying(true);
+    setCurrentSec(0);
+    const video = videoRef.current;
+    if (video) {
+      try {
+        video.currentTime = 0;
+      } catch {
+        // seek can fail before metadata
+      }
+    }
+  };
+
+  const onStagePlayClick = () => {
+    if (lockedCurrent) {
+      openVipForEpisode();
+      return;
+    }
+    setPlaying(true);
+  };
+
   const landPlayer = (
     <div className="player-land">
       <div className="player-land-stage">
-        <video
-          ref={videoRef}
-          className="player-land-video"
-          src={drama.firstEpisodeUrl}
-          poster={drama.watchCover || drama.cover}
-          muted
-          playsInline
-          loop
-          autoPlay
-          preload="auto"
-          onCanPlay={(e) => {
-            const el = e.currentTarget;
-            el.muted = true;
-            void el.play().then(() => setPlaying(true)).catch(() => undefined);
-          }}
-        />
-        <button className="player-land-x" onClick={store.back}>✕</button>
+        {!lockedCurrent ? (
+          <video
+            ref={videoRef}
+            className="player-land-video"
+            src={drama.firstEpisodeUrl}
+            poster={stageCover}
+            muted
+            playsInline
+            autoPlay={playing}
+            preload="auto"
+            onCanPlay={(e) => {
+              if (lockedCurrent) return;
+              const el = e.currentTarget;
+              el.muted = true;
+              void el
+                .play()
+                .then(() => setPlaying(true))
+                .catch(() => undefined);
+            }}
+          />
+        ) : (
+          <img className="player-land-video player-locked-cover" src={stageCover} alt="" />
+        )}
+        {lockedCurrent ? (
+          <>
+            <button className="player-locked-tap" aria-label="Unlock episode" onClick={openVipForEpisode} />
+            <button className="player-play lock" onClick={openVipForEpisode} aria-label="Play locked episode">
+              ▶
+            </button>
+          </>
+        ) : null}
+        <button className="player-land-x" onClick={store.back}>
+          ✕
+        </button>
         <div className="player-land-side">
-          <PlayerLiveActors key={drama.id + "-land"} actors={actors} land onOpen={openActorHome} />
-          <button className={"player-land-ico" + (liked ? " on" : "")} onClick={() => setLiked((v) => !v)}>
+          {actors.length > 0 ? <PlayerLiveActors key={drama.id + "-land"} actors={actors} land onOpen={openActorHome} /> : null}
+          <button className={"player-act" + (liked ? " on" : "")} onClick={() => setLiked((v) => !v)}>
             <span>❤</span>
             <small>{drama.likeCount}</small>
           </button>
-          <button className="player-land-ico" onClick={openRemix} aria-label="Remix">
+          <button className="player-act" onClick={() => setEpisodesOpen(true)}>
+            <span>☰</span>
+            <small>EP</small>
+          </button>
+          <button className="player-act player-act-remix" onClick={openRemix}>
             <span>🎬</span>
             <small>Remix</small>
           </button>
-          <button className="player-land-ico" onClick={() => setLandMode(false)} aria-label="Portrait">
+          <button className="player-act" onClick={() => setLandMode(false)} aria-label="Portrait">
             <span>⛶</span>
           </button>
         </div>
-        {!playing ? (
-          <button
-            className="player-play"
-            onClick={() => {
-              if (isLocked(currentEp)) openVipForEpisode();
-              else setPlaying(true);
-            }}
-            aria-label="Play"
-          >▶</button>
-        ) : (
-          <button className="player-land-tap" onClick={() => setPlaying(false)} aria-label="Pause" />
-        )}
-        <div className="player-land-hud">
-          <span>{fmt(currentSec)} / {durationSec > 0 ? fmt(durationSec) : drama.duration}</span>
-          <div className="player-land-scrub" aria-hidden="true">
+        <div className="player-land-bottom">
+          <div className="player-meta">
+            <b>EP.{currentEp}</b>
+            <em className={lockedCurrent ? "vip" : ""}>{accessLabel}</em>
+          </div>
+          <div className="player-bar">
             <i style={{ width: progress * 100 + "%" }} />
+            <em style={{ left: progress * 100 + "%" }} />
+          </div>
+          <div className="player-time">
+            <span>{lockedCurrent ? "00:00" : fmt(currentSec)}</span>
+            <span>{lockedCurrent ? "00:00" : durationSec > 0 ? fmt(durationSec) : drama.duration}</span>
           </div>
         </div>
       </div>
@@ -573,7 +798,7 @@ export function ShortDramaWatchScreen() {
         <div className="player-land-now">
           <b>EP.{currentEp}</b>
           <span>{epTitle}</span>
-          <em className={isLocked(currentEp) ? "vip" : ""}>{accessLabel}</em>
+          <em className={lockedCurrent ? "vip" : ""}>{accessLabel}</em>
         </div>
         <p className="player-land-syn">{drama.synopsis}</p>
         <div className="player-land-eps-head">
@@ -581,20 +806,32 @@ export function ShortDramaWatchScreen() {
           <em>1–{drama.episodes}</em>
         </div>
         <div className="player-land-eps">
-          {Array.from({ length: drama.episodes }, (_, i) => i + 1).map((ep) => {
+          {Array.from({ length: drama.episodes }, (_, idx) => {
+            const ep = idx + 1;
             const locked = isLocked(ep);
             const current = ep === currentEp;
             return (
               <button
                 key={ep}
+                type="button"
                 className={"player-land-ep-item" + (current ? " on" : "") + (locked ? " lock" : "")}
-                onClick={() => selectLandEpisode(ep)}
+                onClick={() => selectEpisode(ep)}
                 aria-label={locked ? "Episode " + ep + " locked" : "Episode " + ep}
                 aria-current={current ? "true" : undefined}
               >
                 {ep}
-                {current && !locked ? <span className="ep-playing" aria-hidden="true"><i /><i /><i /></span> : null}
-                {locked ? <span className="ep-lock" aria-hidden="true">🔒</span> : null}
+                {current && !locked ? (
+                  <span className="ep-playing" aria-hidden="true">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                ) : null}
+                {locked ? (
+                  <span className="ep-lock" aria-hidden="true">
+                    🔒
+                  </span>
+                ) : null}
               </button>
             );
           })}
@@ -609,7 +846,7 @@ export function ShortDramaWatchScreen() {
                     key={actor.characterId}
                     type="button"
                     aria-label={actor.name}
-                    onClick={() => store.push("character-detail", { id: actor.characterId, from: "short-drama" })}
+                    onClick={() => openActorHome(actor.characterId)}
                   >
                     <img src={actor.avatar} alt="" />
                   </button>
@@ -618,180 +855,13 @@ export function ShortDramaWatchScreen() {
               <div className="player-land-soft-copy">
                 <b>{drama.actors.map((actor) => actor.name).join(", ")}</b>
               </div>
-              <button type="button" className="player-land-chat-soft" onClick={openLeadChat}>Chat</button>
+              <button type="button" className="player-land-chat-soft" onClick={openLeadChat}>
+                Chat
+              </button>
             </div>
           </div>
         ) : null}
       </div>
-    </div>
-  );
-
-  if (landMode) {
-    return <div className="player-land-page">{landPlayer}</div>;
-  }
-
-  return (
-    <div
-      className="player"
-      style={{
-        backgroundImage: "url(" + (drama.watchCover || drama.cover) + ")",
-        backgroundSize: "cover",
-        backgroundPosition: "center top",
-      }}
-    >
-      <video
-        ref={videoRef}
-        className="player-stage-video"
-        src={drama.firstEpisodeUrl}
-        poster={drama.watchCover || drama.cover}
-        muted={fromLanding ? showMuteIcon : true}
-        playsInline
-        loop
-        autoPlay={playing}
-        preload="auto"
-      />
-      <div className="player-fog" />
-      <div className="player-top">
-        <button className="player-close" onClick={store.back}>✕</button>
-        <div className="player-ep">EP {String(currentEp).padStart(2, "0")} / {String(drama.episodes).padStart(2, "0")}</div>
-        <span className="player-close ghost" />
-      </div>
-      {playing && showMuteIcon ? (
-        <button
-          className="player-mute"
-          aria-label="Unmute"
-          onClick={(event) => {
-            event.stopPropagation();
-            setShowMuteIcon(false);
-          }}
-        >
-          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M4 9v6h3.2L12 19.5V4.5L7.2 9H4z" fill="#fff" />
-            <path d="M16.2 9.2 20.8 14.8M20.8 9.2 16.2 14.8" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" />
-          </svg>
-        </button>
-      ) : null}
-      {!playing ? (
-        <button
-          className="player-play"
-          onClick={() => {
-            if (isLocked(currentEp)) openVipForEpisode();
-            else setPlaying(true);
-          }}
-          aria-label="Play"
-        >▶</button>
-      ) : (
-        <button className="player-tap" onClick={() => setPlaying(false)} aria-label="Pause" />
-      )}
-      <div className="player-side">
-        <PlayerLiveActors key={drama.id} actors={actors} onOpen={openActorHome} />
-        <button className={"player-act" + (liked ? " on" : "")} onClick={() => setLiked((v) => !v)}>
-          <span>❤</span>
-          <small>{drama.likeCount}</small>
-        </button>
-        <button className="player-act" onClick={() => setEpisodesOpen(true)}>
-          <span>☰</span>
-          <small>EP</small>
-        </button>
-        <button
-          className="player-act player-act-remix"
-          onClick={openRemix}
-        >
-          <span>🎬</span>
-          <small>Remix</small>
-        </button>
-        <button className="player-act" onClick={() => setLandMode(true)} aria-label="Landscape">
-          <span>⛶</span>
-        </button>
-      </div>
-      <div className="player-bottom">
-        {/* Bottom entry strip hidden while Remix ships first. Keep markup for later. */}
-        <div className="player-cast player-cast-hidden" aria-hidden="true">
-          <button className="player-entry player-entry-remix" tabIndex={-1} onClick={() => { setPlaying(false); try { videoRef.current?.pause(); } catch {} store.push("drama-remix", { id: drama.id, ep: String(currentEp) }); }}>
-            <span className="player-entry-ava player-entry-remix-ava">
-              <span className="player-remix-emoji">🎬</span>
-            </span>
-            <em>Remix</em>
-          </button>
-          <button className="player-entry" tabIndex={-1} onClick={() => store.push("film-scenes", { id: drama.id })}>
-            <span className="player-entry-ava">
-              <img src="/short-drama/entry-film-scenes.png" alt="" />
-            </span>
-            <em>Film Scenes</em>
-          </button>
-          <button className="player-entry" onClick={() => store.push("chat-room", { id: (drama.actors[0] && drama.actors[0].characterId) || "elena", from: "short-drama", context: "You just watched " + drama.title + ". Continue this story with me." })}>
-            <span className="player-entry-ava">
-              <img src="/short-drama/entry-customize-plot.png" alt="" />
-            </span>
-            <em>Customize the Plot</em>
-          </button>
-          <button
-            className="player-entry"
-            onClick={() => store.push("character-album", { id: (drama.actors[0] && drama.actors[0].characterId) || "elena" })}
-          >
-            <span className="player-entry-ava">
-              <img src="/short-drama/entry-album.png" alt="" />
-            </span>
-            <em>{(drama.actors[0] ? drama.actors[0].name : "Elena") + "'s Album"}</em>
-          </button>
-        </div>
-        <div className="player-meta">
-          <b>{epTitle}</b>
-          <span>{accessLabel}</span>
-        </div>
-        <div className="player-bar">
-          <i style={{ width: progress * 100 + "%" }} />
-          <em style={{ left: progress * 100 + "%" }} />
-        </div>
-        <div className="player-time">
-          <span>{fmt(currentSec)}</span>
-          <span>{durationSec > 0 ? fmt(durationSec) : drama.duration}</span>
-        </div>
-      </div>
-      {filmOpen ? (
-        <div className="player-sheet" onClick={() => setFilmOpen(false)}>
-          <div className="player-sheet-card" onClick={(e) => e.stopPropagation()}>
-            <div className="ep-handle" />
-            <div className="ep-head">
-              <div className="ep-title-row"><h4>Film Scenes</h4></div>
-              <p className="ep-syn">Stills from this episode. Tap to keep watching.</p>
-            </div>
-            <div className="film-grid">
-              {[drama.cover, drama.watchCover, ...DRAMAS.map((item) => item.cover)].filter(Boolean).slice(0, 6).map((srcImg, idx) => (
-                <button key={srcImg + idx} className="film-cell" onClick={() => setFilmOpen(false)}>
-                  <img src={srcImg} alt="" />
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : null}
-      {plotOpen ? (
-        <div className="player-sheet" onClick={() => setPlotOpen(false)}>
-          <div className="player-sheet-card" onClick={(e) => e.stopPropagation()}>
-            <div className="ep-handle" />
-            <div className="ep-head">
-              <div className="ep-title-row"><h4>Customize the Plot</h4></div>
-              <p className="ep-syn">Pick how this scene goes. Demo only — does not change the video file.</p>
-            </div>
-            <div className="plot-list">
-              {["She leaves the door unlocked", "You walk in on her", "Rewrite the ending"].map((item) => (
-                <button
-                  key={item}
-                  className={"plot-item" + (plotPick === item ? " on" : "")}
-                  onClick={() => {
-                    setPlotPick(item);
-                    store.toast("Plot set · " + item);
-                    setPlotOpen(false);
-                  }}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : null}
       {episodesOpen ? (
         <div className="player-sheet" onClick={() => setEpisodesOpen(false)}>
           <div className="player-sheet-card" onClick={(e) => e.stopPropagation()}>
@@ -817,31 +887,363 @@ export function ShortDramaWatchScreen() {
               </div>
             ) : null}
             <div className="player-eps">
-              {Array.from({ length: drama.episodes }, (_, i) => i + 1).map((ep) => {
+              {Array.from({ length: drama.episodes }, (_, idx) => {
+                const ep = idx + 1;
                 const locked = isLocked(ep);
                 const current = ep === currentEp;
                 return (
                   <button
                     key={ep}
+                    type="button"
                     className={"player-ep-item" + (current ? " on" : "") + (locked ? " lock" : "")}
-                    onClick={() => {
-                      if (locked) {
-                        openVipForEpisode();
-                        return;
-                      }
-                      setCurrentEp(ep);
-                      setPlaying(true);
-                      setEpisodesOpen(false);
-                    }}
+                    onClick={() => selectEpisode(ep)}
                     aria-label={locked ? "Episode " + ep + " locked" : "Episode " + ep}
+                    aria-current={current ? "true" : undefined}
                   >
                     {ep}
-                    {current ? <span className="ep-playing" aria-hidden><i /><i /><i /></span> : null}
-                    {locked ? <span className="ep-lock" aria-hidden>🔒</span> : null}
+                    {current ? (
+                      <span className="ep-playing" aria-hidden>
+                        <i />
+                        <i />
+                        <i />
+                      </span>
+                    ) : null}
+                    {locked ? (
+                      <span className="ep-lock" aria-hidden>
+                        🔒
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}
             </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+
+  if (landMode) return <div className="player-land-page">{landPlayer}</div>;
+
+  return (
+    <div
+      className="player"
+      style={{
+        backgroundImage: "url(" + stageCover + ")",
+        backgroundSize: "cover",
+        backgroundPosition: "center top",
+      }}
+    >
+      {!lockedCurrent ? (
+        <video
+          ref={videoRef}
+          className="player-stage-video"
+          src={drama.firstEpisodeUrl}
+          poster={stageCover}
+          muted={fromLanding ? showMuteIcon : true}
+          playsInline
+          autoPlay={playing}
+          preload="auto"
+        />
+      ) : (
+        <img className="player-locked-cover" src={stageCover} alt="" />
+      )}
+      <div className="player-fog" />
+      <div className={"player-top" + (lockedCurrent || taskReady ? " on-lock" : "")}>
+        <button
+          className="player-close"
+          onClick={() => (lockedCurrent || taskReady || seriesEnded ? store.openTab("short-drama") : store.back())}
+          aria-label="Close player"
+        >
+          ✕
+        </button>
+        <div className="player-ep">
+          EP {String(currentEp).padStart(2, "0")} / {String(drama.episodes).padStart(2, "0")}
+        </div>
+        <span className="player-close ghost" />
+      </div>
+      {playing && showMuteIcon && !lockedCurrent ? (
+        <button
+          className="player-mute"
+          aria-label="Unmute"
+          onClick={(event) => {
+            event.stopPropagation();
+            setShowMuteIcon(false);
+          }}
+        >
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M4 9v6h3.2L12 19.5V4.5L7.2 9H4z" fill="#fff" />
+            <path d="M16.2 9.2 20.8 14.8M20.8 9.2 16.2 14.8" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" />
+          </svg>
+        </button>
+      ) : null}
+      {seriesEnded ? (
+        <div className="player-end-mask">
+          <div className="player-end-card">
+            {lead ? <>
+              <img className="player-end-ava" src={lead.avatar} alt="" />
+              <div className="player-end-name">{lead.name}</div>
+            </> : null}
+            <p className="player-end-line">
+              That’s all for now. I’m making more — stay with me until it drops.
+            </p>
+            <button className="player-lock-primary" onClick={() => store.openTab("short-drama")}>
+              Back to list
+            </button>
+            {lead ? <button
+              className="player-lock-secondary"
+              onClick={() =>
+                store.push("chat-room", {
+                  id: lead.characterId,
+                  from: "short-drama-end",
+                  context:
+                    "You just finished the current episodes of " +
+                    drama.title +
+                    ". Stay with me until the next ones.",
+                })
+              }
+            >
+              Chat with {lead.name}
+            </button> : null}
+          </div>
+        </div>
+      ) : null}
+      {seriesEnded ? null : lockedCurrent || taskReady ? (
+        <div className="player-lock-mask">
+          <div className="player-lock-card">
+            <div className="player-lock-kicker">
+              {taskReady ? "Unlocked" : gemsLockedCurrent ? "Keep watching" : "Members only"}
+            </div>
+            <div className="player-lock-ep">Exclusive Episode</div>
+            <div className="player-lock-title">{drama.title}</div>
+            <p className="player-lock-copy">
+              {taskReady
+                ? "This exclusive episode is unlocked. Continue watching before it slips away."
+                : gemsLockedCurrent
+                  ? "Your membership already includes the earlier episodes. Use Gems to keep watching this story."
+                  : "Member episodes go further than the free preview. Unlock now so you don’t miss the rest of the story."}
+            </p>
+            <button
+              className="player-lock-play"
+              onClick={taskReady ? playUnlockedEpisode : gemsLockedCurrent ? () => openGemsForEpisode(currentEp) : openVipForEpisode}
+              aria-label={taskReady ? "Play unlocked episode" : "Play locked episode"}
+            >
+              ▶
+            </button>
+            <div className="player-lock-actions">
+              {taskReady ? (
+                <button className="player-lock-primary" onClick={playUnlockedEpisode}>
+                  Watch now
+                </button>
+              ) : (
+                <>
+                  <button
+                    className="player-lock-primary"
+                    onClick={gemsLockedCurrent ? () => openGemsForEpisode(currentEp) : openVipForEpisode}
+                  >
+                    {gemsLockedCurrent ? "Unlock with Gems" : "Upgrade to unlock"}
+                  </button>
+                  {memberLockChatVariant && !gemsLockedCurrent ? (
+                    <MemberLockChatButton lead={lead} onClick={openMemberLockChat} />
+                  ) : null}
+                  {showTaskCta ? (
+                    <>
+                      <button className="player-lock-secondary" onClick={startUnlockTask}>
+                        <span className="player-lock-free">Free unlock</span>
+                        <span>Ask {(lead && lead.name) || "her"} for a photo</span>
+                      </button>
+                      <p className="player-lock-note">Unlocks 1 exclusive episode only</p>
+                    </>
+                  ) : null}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : !playing ? (
+        <button className="player-play" onClick={onStagePlayClick} aria-label="Play">
+          ▶
+        </button>
+      ) : (
+        <button className="player-tap" onClick={() => setPlaying(false)} aria-label="Pause" />
+      )}
+      {seriesEnded ? null : (
+      <div className="player-side">
+        {actors.length > 0 ? <PlayerLiveActors key={drama.id} actors={actors} onOpen={openActorHome} /> : null}
+        <button className={"player-act" + (liked ? " on" : "")} onClick={() => setLiked((v) => !v)}>
+          <span>❤</span>
+          <small>{drama.likeCount}</small>
+        </button>
+        <button className="player-act" onClick={() => setEpisodesOpen(true)}>
+          <span>☰</span>
+          <small>EP</small>
+        </button>
+        <button className="player-act player-act-remix" onClick={openRemix}>
+          <span>🎬</span>
+          <small>Remix</small>
+        </button>
+        <button className="player-act" onClick={() => setLandMode(true)} aria-label="Landscape">
+          <span>⛶</span>
+        </button>
+      </div>
+      )}
+      {seriesEnded || lockedCurrent || taskReady ? null : (
+      <div className="player-bottom">
+        <div className="player-cast player-cast-hidden" aria-hidden="true">
+          <button
+            className="player-entry player-entry-remix"
+            tabIndex={-1}
+            onClick={() => {
+              setPlaying(false);
+              try {
+                videoRef.current?.pause();
+              } catch {}
+              store.push("drama-remix", { id: drama.id, ep: String(currentEp) });
+            }}
+          >
+            <span className="player-entry-ava player-entry-remix-ava">
+              <span className="player-remix-emoji">🎬</span>
+            </span>
+            <em>Remix</em>
+          </button>
+          <button className="player-entry" tabIndex={-1} onClick={() => store.push("film-scenes", { id: drama.id })}>
+            <span className="player-entry-ava">
+              <img src="/short-drama/entry-film-scenes.png" alt="" />
+            </span>
+            <em>Film Scenes</em>
+          </button>
+          <button
+            className="player-entry"
+            onClick={() =>
+              store.push("chat-room", {
+                id: (drama.actors[0] && drama.actors[0].characterId) || "elena",
+                from: "short-drama",
+                context: "You just watched " + drama.title + ". Continue this story with me.",
+              })
+            }
+          >
+            <span className="player-entry-ava">
+              <img src="/short-drama/entry-customize-plot.png" alt="" />
+            </span>
+            <em>Customize the Plot</em>
+          </button>
+          <button
+            className="player-entry"
+            onClick={() =>
+              store.push("character-album", { id: (drama.actors[0] && drama.actors[0].characterId) || "elena" })
+            }
+          >
+            <span className="player-entry-ava">
+              <img src="/short-drama/entry-album.png" alt="" />
+            </span>
+            <em>{(drama.actors[0] ? drama.actors[0].name : "Elena") + "'s Album"}</em>
+          </button>
+        </div>
+        <div className="player-meta">
+          <b>{epTitle}</b>
+          <span className={lockedCurrent ? "vip" : ""}>{accessLabel}</span>
+        </div>
+        <div className="player-bar">
+          <i style={{ width: progress * 100 + "%" }} />
+          <em style={{ left: progress * 100 + "%" }} />
+        </div>
+        <div className="player-time">
+          <span>{fmt(currentSec)}</span>
+          <span>{durationSec > 0 ? fmt(durationSec) : drama.duration}</span>
+        </div>
+      </div>
+      )}
+      {episodesOpen ? (
+        <div className="player-sheet" onClick={() => setEpisodesOpen(false)}>
+          <div className="player-sheet-card" onClick={(e) => e.stopPropagation()}>
+            <div className="ep-handle" />
+            <div className="ep-head">
+              <div className="ep-title-row">
+                <h4>{drama.title}</h4>
+                <span className="ep-range">1 - {drama.episodes}</span>
+              </div>
+              <p className="ep-syn">{drama.synopsis}</p>
+            </div>
+            {drama.actors.length > 0 ? (
+              <div className="ep-cast">
+                {drama.actors.map((actor) => (
+                  <button key={actor.characterId} className="player-actor" onClick={() => openActorHome(actor.characterId)}>
+                    <span className="player-actor-ava">
+                      <img src={actor.avatar} alt="" />
+                      <i>💬</i>
+                    </span>
+                    <em>{actor.name}</em>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <div className="player-eps">
+              {Array.from({ length: drama.episodes }, (_, idx) => {
+                const ep = idx + 1;
+                const locked = isLocked(ep);
+                const current = ep === currentEp;
+                return (
+                  <button
+                    key={ep}
+                    type="button"
+                    className={"player-ep-item" + (current ? " on" : "") + (locked ? " lock" : "")}
+                    onClick={() => selectEpisode(ep)}
+                    aria-label={locked ? "Episode " + ep + " locked" : "Episode " + ep}
+                    aria-current={current ? "true" : undefined}
+                  >
+                    {ep}
+                    {current ? (
+                      <span className="ep-playing" aria-hidden>
+                        <i />
+                        <i />
+                        <i />
+                      </span>
+                    ) : null}
+                    {locked ? (
+                      <span className="ep-lock" aria-hidden>
+                        🔒
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {filmOpen ? (
+        <div className="player-sheet" onClick={() => setFilmOpen(false)}>
+          <div className="player-sheet-card" onClick={(e) => e.stopPropagation()}>
+            <div className="player-sheet-h">Film Scenes</div>
+            <p className="player-sheet-p">Pick a scene branch. Demo only.</p>
+            <button className="cta" onClick={() => setFilmOpen(false)}>
+              Close
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {plotOpen ? (
+        <div className="player-sheet" onClick={() => setPlotOpen(false)}>
+          <div className="player-sheet-card" onClick={(e) => e.stopPropagation()}>
+            <div className="player-sheet-h">Customize the Plot</div>
+            {["She leaves the door unlocked", "You walk in on her", "Rewrite the ending"].map((item) => (
+              <button
+                key={item}
+                className={"player-plot" + (plotPick === item ? " on" : "")}
+                onClick={() => setPlotPick(item)}
+              >
+                {item}
+              </button>
+            ))}
+            <button
+              className="cta"
+              onClick={() => {
+                setPlotOpen(false);
+                openLeadChat();
+              }}
+            >
+              Continue in chat
+            </button>
           </div>
         </div>
       ) : null}
